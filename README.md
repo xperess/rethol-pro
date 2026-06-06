@@ -1,6 +1,15 @@
-دستور اجرای مستقیم (بدون کش):
+دستور اجرای مستقیم (بدون کش)
+
+
+
 
 bash <(curl -H "Cache-Control: no-cache" -H "Pragma: no-cache" -Ls "https://raw.githubusercontent.com/xperess/rethol-pro/main/install.sh?v=$(date +%s)")
+
+
+
+
+
+
 
 
 💡 قانون طلایی در پنل 3X-UI سرور خارج:
