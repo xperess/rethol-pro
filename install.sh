@@ -48,18 +48,23 @@ colorize() {
     echo -e "${style_code}${color_code}${text}\033[0m"
 }
 
-# Install essential packages & bypass Ubuntu 24 prompt blocks
+# Install packages smoothly without Ubuntu 24 prompt freezes
 install_dependencies() {
-    apt-get update -y && apt-get install -y unzip cron jq net-tools ufw sshpass curl < /dev/null
+    apt-get update -y && apt-get install -y unzip cron jq net-tools ufw sshpass curl lsof < /dev/null
 }
 install_dependencies
 
-# Anti-clash tool to kill ghost ports before running services
+# Robust anti-clash system to free up frozen ports
 clear_port_clash() {
     local target_port=$1
-    local pid=$(netstat -lntp 2>/dev/null | grep ":$target_port " | awk '{print $7}' | cut -d'/' -f1)
-    if [ ! -z "$pid" ] && [[ "$pid" =~ ^[0-9]+$ ]]; then
-        kill -9 $pid >/dev/null 2>&1
+    if [ ! -z "$target_port" ]; then
+        # Kill using lsof
+        sudo kill -9 $(sudo lsof -t -i:$target_port) >/dev/null 2>&1
+        # Double check with netstat
+        local pid=$(netstat -lntp 2>/dev/null | grep ":$target_port " | awk '{print $7}' | cut -d'/' -f1)
+        if [ ! -z "$pid" ] && [[ "$pid" =~ ^[0-9]+$ ]]; then
+            kill -9 $pid >/dev/null 2>&1
+        fi
     fi
 }
 
@@ -100,7 +105,7 @@ ____________ _/  |_|  |__   ____ |  |   ____
  |__|  (____  /__| |___|  /\____/|____/\___  >
             \/          \/                 \/ 
 EOF
-    echo -e "${NC}${GREEN}Version: ${YELLOW}v3.0 PRO (Fix-Ping Enhanced)${NC}"
+    echo -e "${NC}${GREEN}Version: ${YELLOW}v3.0 PRO (Fixed Name Sync & Anti-Clash)${NC}"
 }
 
 display_server_info() {
@@ -116,14 +121,6 @@ display_rathole_core_status() {
         echo -e "${CYAN}Rathole Core:${NC} ${RED}Not installed${NC}"
     fi
     echo -e "\e[93m═════════════════════════════════════════════\e[0m"  
-}
-
-check_ipv6() {
-    local ip=$1
-    local ipv6_pattern="^([0-9a-fA-F]{1,4}:){7}([0-9a-fA-F]{1,4}|:)$|^(([0-9a-fA-F]{1,4}:){1,7}|:):((:[0-9a-fA-F]{1,4}){1,7}|:)$"
-    ip="${ip#[}"
-    ip="${ip%]}"
-    if [[ $ip =~ $ipv6_pattern ]]; then return 0; else return 1; fi
 }
 
 check_port() {
@@ -163,7 +160,7 @@ iran_server_configuration() {
     kharej_ssh_port=${kharej_ssh_port:-22}
     read -p "Kharej Root Password: " kharej_pass
 
-    # Save credentials safely
+    # Save credentials securely
     mkdir -p "$config_dir/secure"
     cat <<EOT > "$config_dir/secure/ssh_creds.conf"
 KHAREJ_IP="$kharej_ip"
@@ -172,7 +169,7 @@ KHAREJ_PASS="$kharej_pass"
 EOT
     chmod 600 "$config_dir/secure/ssh_creds.conf"
 
-    # Build the SOCKS5 runner
+    # Build the SOCKS5 proxy corridor runner
     cat << 'RUNNER' > "$config_dir/proxy_runner.sh"
 #!/bin/bash
 source /root/rathole-core/secure/ssh_creds.conf
@@ -197,7 +194,7 @@ EOT
     systemctl daemon-reload
     systemctl enable --now khalifeh-proxy.service
 
-    # Create routing environment rules for Rathole core
+    # Create proxy environment rules for Rathole core routing
     cat <<EOT > "$config_dir/proxy_env.conf"
 http_proxy=socks5://127.0.0.1:1080
 https_proxy=socks5://127.0.0.1:1080
@@ -240,6 +237,7 @@ EOT
 
     ufw allow $tunnel_port/tcp >/dev/null 2>&1
 
+    # Exact sync naming structure [server.services.port_XXX]
     cat << EOF > "${config_dir}/iran${tunnel_port}.toml"
 [server]
 bind_addr = "${local_ip}:${tunnel_port}"
@@ -278,7 +276,7 @@ EOF
     systemctl daemon-reload
     systemctl enable --now "rathole-iran${tunnel_port}.service"
     ufw reload >/dev/null 2>&1
-    colorize green "Iran server configured successfully with proxy stabilization pipeline."
+    colorize green "Iran server configured successfully. Naming schema verified."
 }
 
 kharej_server_configuration() {
@@ -288,6 +286,7 @@ kharej_server_configuration() {
     read -p "[*] IRAN server IP address: " SERVER_ADDR
     read -p "[*] Tunnel port [Default 2333]: " tunnel_port
     tunnel_port=${tunnel_port:-2333}
+    clear_port_clash "$tunnel_port"
     
     local nodelay="true"
     local HEARTBEAT="40"
@@ -302,6 +301,7 @@ kharej_server_configuration() {
 
     for port in "${ports[@]}"; do
         if [[ "$port" =~ ^[0-9]+$ ]]; then
+            clear_port_clash "$port"
             config_ports+=("$port")
         fi
     done
@@ -309,6 +309,7 @@ kharej_server_configuration() {
     local_ip='127.0.0.1'
     ufw allow $tunnel_port/tcp >/dev/null 2>&1
 
+    # Exact sync naming structure [client.services.port_XXX]
     cat << EOF > "${config_dir}/kharej${tunnel_port}.toml"
 [client]
 remote_addr = "${SERVER_ADDR}:${tunnel_port}"
@@ -348,12 +349,12 @@ EOF
     systemctl daemon-reload
     systemctl enable --now "rathole-kharej${tunnel_port}.service"
     ufw reload >/dev/null 2>&1
-    colorize green "Kharej client pipeline initialized."
+    colorize green "Kharej client configuration finalized."
 }
 
 check_tunnel_status() {
     clear
-    colorize yellow "Checking all system services..." bold
+    colorize yellow "Checking all active systems status..." bold
     echo
     for config_path in "$config_dir"/iran*.toml; do
         if [ -f "$config_path" ]; then
@@ -370,7 +371,7 @@ check_tunnel_status() {
         fi
     done
     if systemctl is-active --quiet khalifeh-proxy.service; then
-        colorize green "khalifeh-proxy.service (Proxy Corridor) is RUNNING"
+        colorize green "khalifeh-proxy.service (Fix-Ping Proxy Corridor) is RUNNING"
     fi
     echo
     press_key
@@ -405,7 +406,7 @@ tunnel_management() {
     echo "1) Remove this tunnel"
     echo "2) Restart this tunnel"
     echo "3) Add a new port configuration"
-    echo "4) View logs"
+    echo "4) View live service logs"
     read -p "Action: " act
     
     case $act in
@@ -424,7 +425,7 @@ destroy_tunnel(){
     systemctl disable --now "$service_name" >/dev/null 2>&1
     rm -f "$config_path" "${service_dir}/${service_name}"
     systemctl daemon-reload
-    colorize red "Tunnel eliminated successfully."
+    colorize red "Tunnel wiped successfully."
 }
 
 add_new_config(){
@@ -454,10 +455,9 @@ EOF
     done
     config_name=$(basename "$config_path" .toml)
     systemctl restart "rathole-${config_name}.service"
-    colorize green "Ports integrated successfully."
+    colorize green "Ports integrated cleanly."
 }
 
-# Completely wipe script and services
 wipe_all_services() {
     clear
     colorize red "Wiping all rathole and proxy infrastructure..." bold
